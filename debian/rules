@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+export DH_OPTIONS
+
+export GOPATH=${PWD}
+export GO15VENDOREXPERIMENT=1
+export DH_GOPKG := github.com/FiloSottile/gvt
+
+%:
+	dh $@ --buildsystem=golang --with=golang
+
+override_dh_auto_install:
+	dh_install
+
+override_dh_auto_test:
+	echo "Not running tests since they contact 3rd party servers"
