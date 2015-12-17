@@ -34,7 +34,23 @@ func Copypath(dst string, src string) error {
 
 		if info.Mode()&os.ModeSymlink != 0 {
 			if debugCopypath {
-				fmt.Printf("skipping symlink: %v\n", path)
+				fmt.Printf("handling symlink: %v\n", path)
+			}
+			target, err := os.Readlink(path)
+			if err != nil {
+				if debugCopypath {
+					fmt.Printf("reading symlink error (%v): %s\n", path, err)
+				}
+				return err
+			}
+			dst := filepath.Join(dst, path[len(src):])
+			fmt.Printf("making symlink: %v -> %v\n", dst, target)
+			err = os.Symlink(target, dst)
+			if err != nil {
+				if debugCopypath {
+					fmt.Printf("making symlink error (%v): %s\n", path, err)
+				}
+				return err
 			}
 			return nil
 		}
@@ -68,5 +84,8 @@ func copyfile(dst, src string) error {
 		fmt.Printf("copyfile(dst: %v, src: %v)\n", dst, src)
 	}
 	_, err = io.Copy(w, r)
+	if err != nil {
+		fmt.Printf("copyfile(dst: %v, src: %v) %s\n", dst, src, err)
+	}
 	return err
 }
