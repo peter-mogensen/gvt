@@ -16,6 +16,8 @@ const debugCopyfile = false
 // Copypath copies the contents of src to dst, excluding any file or
 // directory that starts with a period.
 func Copypath(dst string, src string) error {
+	var symlinks []string
+	
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -29,35 +31,42 @@ func Copypath(dst string, src string) error {
 		}
 
 		if info.IsDir() {
-			return nil
+			return os.MkdirAll(
+				filepath.Join(dst, path[len(src):]),
+				info.Mode() & os.ModePerm)
 		}
 
 		if info.Mode()&os.ModeSymlink != 0 {
-			if debugCopypath {
-				fmt.Printf("handling symlink: %v\n", path)
-			}
-			target, err := os.Readlink(path)
-			if err != nil {
-				if debugCopypath {
-					fmt.Printf("reading symlink error (%v): %s\n", path, err)
-				}
-				return err
-			}
-			dst := filepath.Join(dst, path[len(src):])
-			fmt.Printf("making symlink: %v -> %v\n", dst, target)
-			err = os.Symlink(target, dst)
-			if err != nil {
-				if debugCopypath {
-					fmt.Printf("making symlink error (%v): %s\n", path, err)
-				}
-				return err
-			}
+			// postpone symlink creation to last
+			symlinks = append(symlinks,path)
 			return nil
 		}
 
 		dst := filepath.Join(dst, path[len(src):])
 		return copyfile(dst, path)
 	})
+
+	// Handle symlinks last
+	for _, path := range symlinks {
+		target, err := os.Readlink(path)
+		if err != nil {
+			if debugCopypath {
+				fmt.Printf("reading symlink error (%v): %s\n", path, err)
+			}
+			goto CLEANUP
+		}
+		dst := filepath.Join(dst, path[len(src):])
+		fmt.Printf("making symlink: %v -> %v\n", dst, target)
+		err = os.Symlink(target, dst)
+		if err != nil {
+			if debugCopypath {
+				fmt.Printf("making symlink error (%v): %s\n", path, err)
+			}
+			goto CLEANUP
+		}
+	}
+
+CLEANUP:
 	if err != nil {
 		// if there was an error during copying, remove the partial copy.
 		fileutils.RemoveAll(dst)
